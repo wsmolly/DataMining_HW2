@@ -59,7 +59,7 @@ Capmetro=Capmetro%>%mutate(weekday=ifelse(day_of_week=='Sat'|day_of_week=='Sun',
 
 Capmetro2=Capmetro%>%group_by(hour_of_day,weekday,temperature)%>%summarize(Avg.boardings=sum(boarding)/n())
 
-ggplot(data=Capmetro2)+geom_point(mapping=aes(x=temperature,y=Avg.boardings,color=weekday))+facet_wrap(~hour_of_day)+labs(caption="Plot B: Average bodardings by temperature, colored by weekday, faceted according to hour of a day")
+ggplot(data=Capmetro2)+geom_point(mapping=aes(x=temperature,y=Avg.boardings,color=weekday))+facet_wrap(~hour_of_day)+labs(caption="Plot B: Average bodardings by temperature, colored by weekday,and faceted by hour")
 
 ```
 
@@ -216,7 +216,7 @@ urlfile="https://raw.githubusercontent.com/jgscott/ECO395M/master/data/german_cr
 credit<-read_csv(url(urlfile))
 ```
 
-First, build a bar plot of default probability by credit history. It seems that the credit history of "poor" is more likely to trigger defaults.
+First, build a bar plot of **default probability by credit history**. It seems that the credit history of "good" is more likely to trigger defaults.
 
 ```{r, echo=FALSE, warning=FALSE, message = FALSE}
 credit1=credit%>%group_by(history)%>%summarize(Avg.default=sum(Default)/n())
@@ -230,7 +230,7 @@ Next, build a logistic regression model.
 glm(Default~duration+amount+installment+age+history+purpose+foreign, data=credit,family=binomial)
 ```
 
-The history variables show that relative to good history firms, poor history and terrible history firms are less likely to default, which is extremely counter-intuitive. I think this data set is not a good input for building a predictive model of defaults because the bank should not over-sample the defaults. For high credit ranking firms with default, it is less likely to find a matched pair. I recommend firms use a random sample from the overall portfolio and adding more variables to control for other factors.
+The history variables show that relative to good history firms, poor history and terrible history firms are less likely to default, which is extremely counter-intuitive. I think this data set is not a good input for building a predictive model of defaults because the bank should not over-sample the defaults. For high credit ranking firms with default, it is less likely to find a matched pair. I recommend using a random sample from the overall portfolio and adding more variables to control for other factors.
 
 
 \newpage
@@ -340,7 +340,7 @@ ggplot(roc_curve_best) +
 
 \newpage
 **Model validation:step 2**\newline
-I create 20 folds within the testing data. Within each fold, I predict whether each booking will have children on it. Moreover, I sum up the predicted probabilities for all the booking in the fold. Below is the graph of the expected number of bookings across all 20 folds.
+I create 20 folds within the testing data. Within each fold, I predict whether each booking will have children on it. Moreover, I sum up the predicted probabilities for all the booking in the fold. Below is the graph of the **expected number of bookings across 20 folds**.
 
 ```{r, echo=FALSE, warning=FALSE, message = FALSE}
 # K-fold cross validation
@@ -374,13 +374,13 @@ plot(1:20, rowMeans(predict_save),xlab="K-Folds", ylab="Sum of Probabilities",
 ```
 
 \newpage
-Below is the squared error of "expected" number of bookings versus actual number of bookings with children in that fold.
+Below is the **squared error of expected number of bookings across 20 folds** (versus actual number of bookings with children in that fold.)
 
 ```{r, echo=FALSE, warning=FALSE, message = FALSE}
-plot(1:20, rowMeans(predict_error),xlab="K-Folds", ylab="Square Errors", ylim=c(0, 0.15))
+plot(1:20, rowMeans(predict_error),xlab="K-Folds", ylab="Squared Errors", ylim=c(0, 0.15))
 
 ```
 
-My model does relatively well at predicting the total number of bookings. The sum of square errors is quite small. Overall, the K-vold methods give me more confidence to validate my model.
+My model does relatively well at predicting the total number of bookings. The sum of square errors is quite small. Overall, the K-folds methods give me more confidence to validate my model.
 
 
