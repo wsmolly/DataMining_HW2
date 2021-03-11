@@ -1,0 +1,386 @@
+---
+title: "DataMining_HW2"
+author: "Wen-Hsin Chang"
+date: "2021/3/1"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r, echo=FALSE, message = FALSE}
+library(ggplot2)
+library(tidyverse)
+library(mosaic)
+library(dbplyr)
+library (readr)
+```
+
+## Problem 1: Visualization
+**Panel A**
+```{r, echo=FALSE, message = FALSE}
+urlfile="https://raw.githubusercontent.com/jgscott/ECO395M/master/data/capmetro_UT.csv"
+Capmetro<-read_csv(url(urlfile))
+```
+
+```{r, echo=FALSE, message = FALSE}
+# Recode the categorical variables in sensible, rather than alphabetical, order
+Capmetro = mutate(Capmetro,
+               day_of_week = factor(day_of_week,
+                 levels=c("Mon", "Tue", "Wed","Thu", "Fri", "Sat", "Sun")),
+               month = factor(month,
+                 levels=c("Sep", "Oct","Nov")))
+```
+
+
+
+```{r, echo=FALSE, message = FALSE}
+Capmetro1=Capmetro%>%group_by(hour_of_day,day_of_week,month)%>%summarize(Avg.boardings=sum(boarding)/n())
+ggplot(data=Capmetro1)+geom_line(mapping=aes(x=hour_of_day,y=Avg.boardings,color=month))+facet_wrap(~day_of_week)+labs(caption="Plot A: Average bodardings by hour of day, colored by month, faceted according to day of a week")
+
+```
+
+*Does the hour of peak boardings changes from day to day?*
+According to the graph above, the hour of peak boardings is around 17:30 during workday and the pattern is similar from day to day. However, the boardings remain low during weekend and there isn't a clear peak as indicated by the flat line.
+
+*Why do you think average boardings on Mondays in September look lower?*
+We can clearly see that the average boardings in September on Monday are lower compared to other workdays and other months. One possible reason may be that when the fall semester first starts in September, students suffer more from "Monday blues", making them less likely to go to school.
+
+*Why do you think average boardings on Weds/Thurs/Fri in November look lower*
+Based on the graph above, it does show lower average boardings on Weds/Thurs/Fri in November. My guess is that the Thanksgiving holiday is going on by the end of November, and thus students are very likely to be off-campus. 
+
+\newpage
+**Panel B**
+
+```{r, echo=FALSE, message = FALSE}
+Capmetro=Capmetro%>%mutate(weekday=ifelse(day_of_week=='Sat'|day_of_week=='Sun','Weekday:No','Weekday:Yes'))
+
+Capmetro2=Capmetro%>%group_by(hour_of_day,weekday,temperature)%>%summarize(Avg.boardings=sum(boarding)/n())
+
+ggplot(data=Capmetro2)+geom_point(mapping=aes(x=temperature,y=Avg.boardings,color=weekday))+facet_wrap(~hour_of_day)+labs(caption="Plot B: Average bodardings by temperature, colored by weekday, faceted according to hour of a day")
+
+```
+
+Based on Panel B,  we can see that when we hold hour of day and weekend status constant, the temperature seems not to have a noticeable effect on the number of UT students riding the bus since there isn't a clear upward or downward trend in the scatter plots. One possible explanation may be that the weather rage in Austin during the sample period is not too spread out and therefore not too extreme to influence a student's willingness to commute. 
+
+
+\newpage
+## Problem 2: Saratoga house prices
+
+```{r, echo=FALSE, message = FALSE}
+library(modelr)
+library(mosaic)
+library (readr)
+library(rsample)  # for creating train/test splits
+library(caret)
+library(installr)
+library(foreach)
+data(SaratogaHouses)
+```
+
+```{r, echo=FALSE, message = FALSE}
+#Change categorical to numbers
+SaratogaHouses1 = mutate(SaratogaHouses,
+               waterfront_n = (ifelse(waterfront=="Yes",1,0)),newconstruction_n = (ifelse(newConstruction=="Yes",1,0)),centralair_n = (ifelse(centralAir=="Yes",1,0)))
+
+```
+
+First, to get a sense of the significance of all the factors in linear form, my way is to look at the regression result of all covariates.
+
+```{r, echo=FALSE, message = FALSE}
+lm=lm(formula = price ~ ., data = SaratogaHouses)
+summary(lm)
+```
+
+From the regression result of the medium sample, we can tell that lotSize, landvalue, living area, bedrooms,  bathrooms, waterfront, and NewConstruction are very important factors in determining price (significant at 1%). In terms of economic significance, I also decide to include the interaction term between landvalue and lotSize because it makes intuitive sense.
+
+**performance of the"medium" linear model versus the new linear model**
+
+```{r, echo=FALSE, message = FALSE}
+
+
+rmse_base <- vector()
+rmse_new <- vector()
+for(x in 1:100){
+  
+  n = nrow(SaratogaHouses)
+  # re-split into train and test cases
+  n_train = round(0.8*n)  # round to nearest integer
+  n_test = n - n_train
+  train_cases = sample.int(n, n_train, replace=FALSE)
+  test_cases = setdiff(1:n, train_cases)
+  saratoga_train = SaratogaHouses[train_cases,]
+  saratoga_test = SaratogaHouses[test_cases,]
+  
+  # fit to this training set
+  
+  
+lm2 = lm(price ~ . - pctCollege - sewer - waterfront - landValue - newConstruction, data=saratoga_train)
+
+rmse_base<- c( rmse_base,rmse(lm2, saratoga_test))
+
+lm_new = lm(price ~ lotSize+livingArea+landValue+bedrooms+bathrooms+waterfront+newConstruction+landValue*lotSize, data=saratoga_train)
+
+rmse_new<- c( rmse_new,rmse(lm_new, saratoga_test))
+  
+}
+
+sprintf("RMSE of medium model: %i" ,round(mean(rmse_base),0))
+sprintf("RMSE of new linear model: %i" ,round(mean(rmse_new),0))
+
+```
+
+The result above shows that the RMSE of my new linear model is smaller than the RMSE of the medium model. I think the main reason may be that the medium model includes too many variables that are not highly related to the house price, making the prediction less accurate outside the training sample.
+
+
+**My best KNN model**\newline
+I include all variables that are significant in the full regression above.
+
+
+```{r,echo=FALSE , message = FALSE,warning=FALSE}
+# K-fold cross validation
+K_folds = 20
+saratoga_folds = crossv_kfold(SaratogaHouses, k=K_folds)
+# create a grid of K values -- the precise grid isn't important as long
+# as you cover a wide range
+k_grid = seq(2, 80, by=2)
+# For each value of k, map the model-fitting function over the folds
+# Using the same folds is important, otherwise we're not comparing
+# models across the same train/test splits
+cv_grid = foreach(k = k_grid, .combine='rbind') %do% {
+models = map(saratoga_folds$train, ~ knnreg(price ~ lotSize+livingArea+landValue+bedrooms+bathrooms+waterfront+newConstruction, k=k, data = ., use.all=FALSE))
+
+errs = map2_dbl(models, saratoga_folds$test, modelr::rmse)
+c(k=k, err = mean(errs), std_err = sd(errs)/sqrt(K_folds))
+} %>% as.data.frame
+# plot means and std errors versus k
+ggplot(cv_grid) +
+geom_point(aes(x=k, y=err)) +
+geom_errorbar(aes(x=k, ymin = err-std_err, ymax = err+std_err)) +
+labs(y="RMSE", title="RMSE vs k for KNN regression")
+
+```
+
+From the graph above, it seems that my KNN model attains the least mean square error around k=5. Therefore, I will use k=5 in the analysis afterward.
+
+```{r,, message = FALSE,warning=FALSE}
+##Standardize x variables in KNN
+SaratogaHouses=SaratogaHouses%>%mutate(lotSize_s=(lotSize-mean(lotSize))/sd(lotSize),livingArea_s=(livingArea-mean(livingArea))/sd(livingArea),landValue_s=(landValue-mean(landValue))/sd(landValue),bedrooms_s=(bedrooms-mean(bedrooms))/sd(bedrooms),bathrooms_s=(bathrooms-mean(bathrooms))/sd(bathrooms))
+
+```
+
+
+** My linear model versus KNN model (after standardizing)** 
+```{r,echo=FALSE , message = FALSE,warning=FALSE}
+
+rmse_linear <- vector()
+rmse_knn <- vector()
+for(x in 1:100){
+  
+  n = nrow(SaratogaHouses)
+  # re-split into train and test cases
+  n_train = round(0.8*n)  # round to nearest integer
+  n_test = n - n_train
+  train_cases = sample.int(n, n_train, replace=FALSE)
+  test_cases = setdiff(1:n, train_cases)
+  saratoga_train = SaratogaHouses[train_cases,]
+  saratoga_test = SaratogaHouses[test_cases,]
+  
+  # fit to this training set
+lm_new = lm(price ~ lotSize+livingArea+landValue+bedrooms+bathrooms+waterfront+newConstruction+landValue*lotSize, data=saratoga_train)
+
+knn_new=knnreg(price ~ lotSize_s+livingArea_s+landValue_s+bedrooms_s+bathrooms_s+waterfront+newConstruction,data=saratoga_train,k=5)
+
+rmse_linear<- c(rmse(lm_new, saratoga_test))
+
+rmse_knn<- c( rmse(knn_new, saratoga_test))
+
+  
+}
+sprintf("RMSE of linear model: %i" ,round(mean(rmse_linear),0))
+sprintf("RMSE of KNN model: %i" ,round(mean(rmse_knn),0))
+
+```
+
+According to the average estimate of out-of-sample RMSE over many train/test split, my linear model seems to perform better than the KNN model. Therefore, I recommend building a linear model using variable lotSize, landvalue, living area, bedrooms, bathrooms, waterfront,and NewConstruction and adding an interatciton term between landvalue and living area. However, the model is always subject to improvement. If we can obtain a more diverse data category, then maybe it will work better overall or under the KNN method.
+
+
+\newpage
+## Problem 3: Classification and retrospective sampling
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+
+urlfile="https://raw.githubusercontent.com/jgscott/ECO395M/master/data/german_credit.csv"
+credit<-read_csv(url(urlfile))
+```
+
+First, build a bar plot of default probability by credit history. It seems that the credit history of "poor" is more likely to trigger defaults.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+credit1=credit%>%group_by(history)%>%summarize(Avg.default=sum(Default)/n())
+ggplot(data=credit1)+geom_bar(mapping=aes(x=history,y=Avg.default),stat='identity')
+```
+
+\newpage
+Next, build a logistic regression model.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+glm(Default~duration+amount+installment+age+history+purpose+foreign, data=credit,family=binomial)
+```
+
+The history variables show that relative to good history firms, poor history and terrible history firms are less likely to default, which is extremely counter-intuitive. I think this data set is not a good input for building a predictive model of defaults because the bank should not over-sample the defaults. For high credit ranking firms with default, it is less likely to find a matched pair. I recommend firms use a random sample from the overall portfolio and adding more variables to control for other factors.
+
+
+\newpage
+## Problem 4: Children and hotel reservations
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+urlfile="https://raw.githubusercontent.com/jgscott/ECO395M/master/data/hotels_dev.csv"
+Dev<-read_csv(url(urlfile))
+```
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+urlfile="https://raw.githubusercontent.com/jgscott/ECO395M/master/data/hotels_val.csv"
+Val<-read_csv(url(urlfile))
+```
+
+**Model Building**
+Firstly, I would like to take a look at the linear probability model coefficient.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+lm=lm(children ~.-arrival_date,data=Dev)
+coef(lm)
+```
+
+For my best linear model, I expand baseline 2 and add an interaction term between adults and total_of_special_requests. The main reason is that holding the number of adults fixed, when a room requests more special requests, it may be an indicator that there are "hidden children" in the room.
+
+*Out-of-sample performance for baseline1, baseline2, and my best linear model*
+My best linear model seems to perform the best among the three.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+
+acc1 <- vector()
+acc2 <- vector()
+acc3 <- vector()
+
+
+for(x in 1:10){
+  
+  n = nrow(Dev)
+  # re-split into train and test cases
+  n_train = round(0.8*n)  # round to nearest integer
+  n_test = n - n_train
+  train_cases = sample.int(n, n_train, replace=FALSE)
+  test_cases = setdiff(1:n, train_cases)
+  Dev_train = Dev[train_cases,]
+  Dev_test = Dev[test_cases,]
+  
+  # fit to this training set
+baseline1 = lm(children ~ market_segment+adults+customer_type+is_repeated_guest,data=Dev)
+phat_test_dev1=predict(baseline1,Dev)
+yhat_test_dev1=ifelse(phat_test_dev1 > 0.5,1,0)
+consufion_out1=table(y=Dev$children,yhat=yhat_test_dev1)
+acc1<-c(sum(diag(consufion_out1))/sum(consufion_out1))
+
+baseline2 = lm(children ~.-arrival_date,data=Dev)
+phat_test_dev2=predict(baseline2,Dev)
+yhat_test_dev2=ifelse(phat_test_dev2 > 0.5,1,0)
+consufion_out2=table(y=Dev$children,yhat=yhat_test_dev2)
+acc2<-c(sum(diag(consufion_out2))/sum(consufion_out2))
+
+baseline3 = lm(children ~.-arrival_date+adults*total_of_special_requests,data=Dev)
+phat_test_dev3=predict(baseline3,Dev)
+yhat_test_dev3=ifelse(phat_test_dev3 > 0.5,1,0)
+consufion_out3=table(y=Dev$children,yhat=yhat_test_dev3)
+acc3<-c(sum(diag(consufion_out3))/sum(consufion_out3))
+
+
+}
+
+sprintf("out-of-sample performance- Baseline1: %f" ,mean(acc1),-6)
+sprintf("out-of-sample performance- Baseline2: %f" ,mean(acc2),-6)
+sprintf("out-of-sample performance- Baseline3: %f" ,mean(acc3),-6)
+
+
+```
+
+
+**Model validation:step 1**\newline
+
+Below is the ROC curve for my best model. The shape seems pretty standard. 
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+
+lm_best=lm(children ~.-arrival_date+adults*total_of_special_requests,data=Dev)
+phat_test_lm_best = predict(lm_best, Val, type='response')
+
+
+thresh_grid = seq(0.95, 0.05, by=-0.005)
+roc_curve_best = foreach(thresh = thresh_grid, .combine='rbind') %do% {
+  yhat_test_linear_best = ifelse(phat_test_lm_best >= thresh, 1, 0)
+ 
+  # FPR, TPR for linear model
+  confusion_out_best = table(y = Val$children, yhat = yhat_test_linear_best)
+ 
+  out_best = data.frame(model = "my best model",
+                       TPR = confusion_out_best[2,2]/sum(Val$children==1),
+                       FPR = confusion_out_best[1,2]/sum(Val$children==0))
+  
+
+  rbind(out_best)} %>% as.data.frame()
+
+ggplot(roc_curve_best) + 
+  geom_line(aes(x=FPR, y=TPR, color=model)) + 
+  labs(title="ROC curves") +
+  theme_bw(base_size = 10)
+
+```
+
+\newpage
+**Model validation:step 2**\newline
+I create 20 folds within the testing data. Within each fold, I predict whether each booking will have children on it. Moreover, I sum up the predicted probabilities for all the booking in the fold. Below is the graph of the expected number of bookings across all 20 folds.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+# K-fold cross validation
+# allocate to folds
+N = nrow(Val)
+K = 20
+fold_id = rep_len(1:K, N)  # repeats 1:K over and over again
+fold_id = sample(fold_id, replace=FALSE) # permute the order randomly
+
+
+predict_save = matrix(0, nrow=K)
+predict_error = matrix(0, nrow=K)
+
+for(i in 1:20) {
+  train_set = which(fold_id != i)
+  y_test = Val$children[-train_set]
+  
+    this_model = lm(children ~.-arrival_date+adults*total_of_special_requests, data=Val[train_set,])
+    
+    yhat_test = predict(this_model, newdata=Val[-train_set,])
+    
+    predict_save[i] = sum(yhat_test)
+    predict_error[i] = mean((y_test - yhat_test)^2)
+  
+}
+
+
+plot(1:20, rowMeans(predict_save),xlab="K-Folds", ylab="Sum of Probabilities",
+  xlim=c(0, 20), ylim=c(10, 40))
+
+```
+
+\newpage
+Below is the squared error of "expected" number of bookings versus actual number of bookings with children in that fold.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+plot(1:20, rowMeans(predict_error),xlab="K-Folds", ylab="Square Errors", ylim=c(0, 0.15))
+
+```
+
+My model does relatively well at predicting the total number of bookings. The sum of square errors is quite small. Overall, the K-vold methods give me more confidence to validate my model.
+
+
