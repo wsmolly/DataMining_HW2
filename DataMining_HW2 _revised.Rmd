@@ -301,7 +301,7 @@ acc3<-c(sum(diag(consufion_out3))/sum(consufion_out3))
 
 sprintf("out-of-sample performance- Baseline1: %f" ,mean(acc1),-6)
 sprintf("out-of-sample performance- Baseline2: %f" ,mean(acc2),-6)
-sprintf("out-of-sample performance- Baseline3: %f" ,mean(acc3),-6)
+sprintf("out-of-sample performance- My best model: %f" ,mean(acc3),-6)
 
 
 ```
